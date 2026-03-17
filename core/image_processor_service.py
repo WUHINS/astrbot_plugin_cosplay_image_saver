@@ -3,6 +3,7 @@ import hashlib
 import os
 import shutil
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -240,8 +241,8 @@ class ImageProcessorService:
             if not group_id:
                 return False, "无法获取群号"
 
-            # 获取发送者信息
-            sender_id = event.get_sender_id()
+            # 获取发送者信息（直接使用 event 的方法）
+            sender_id = event.get_sender_id() or ""
             sender_name = event.get_sender_name() or sender_id
 
             if not sender_id:
@@ -294,6 +295,23 @@ class ImageProcessorService:
                 return False, "文件已被删除"
 
             logger.info(f"已保存女装图片：{save_path}")
+            
+            # 写入持久化记录（异步）
+            try:
+                record = {
+                    "save_path": str(save_path),
+                    "group_id": group_id,
+                    "user_id": sender_id,
+                    "user_name": sender_name,
+                    "hash": new_image_hash,
+                    "timestamp": datetime.now().isoformat(),
+                    "file_size": save_path.stat().st_size if save_path.exists() else 0
+                }
+                await self.plugin_config.add_image_record(record)
+                logger.debug(f"已写入图片记录：{record['save_path']}")
+            except Exception as e:
+                logger.error(f"写入图片记录失败：{e}")
+            
             return True, str(save_path)
 
         except Exception as e:

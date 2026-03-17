@@ -55,7 +55,16 @@ class TaskScheduler:
                 try:
                     # 解析发送时间（带异常处理）
                     try:
-                        hour, minute = map(int, self.smtp_config.send_time.split(':'))
+                        time_str = self.smtp_config.send_time
+                        # 验证格式
+                        if not time_str or ':' not in time_str:
+                            raise ValueError(f"时间格式错误：{time_str}")
+                        
+                        parts = time_str.split(':')
+                        if len(parts) != 2:
+                            raise ValueError(f"时间格式错误：{time_str}")
+                        
+                        hour, minute = map(int, parts)
                         # 验证时间范围
                         if not (0 <= hour <= 23 and 0 <= minute <= 59):
                             raise ValueError(f"时间超出范围：{hour}:{minute}")
@@ -108,8 +117,8 @@ class TaskScheduler:
             daily_report = DailyReportService(self.plugin)
             smtp_service = SMTPService(self.plugin)
 
-            # 获取昨日统计
-            stats = daily_report.get_yesterday_stats()
+            # 获取昨日统计（异步）
+            stats = await daily_report.get_yesterday_stats()
 
             # 生成 HTML 报告
             html_content = daily_report.generate_html_report(stats)
@@ -127,7 +136,7 @@ class TaskScheduler:
             logger.error(f"[调度器] 生成或发送日报失败：{e}", exc_info=True)
 
     async def send_daily_report_now(self) -> tuple[bool, str]:
-        """立即发送每日日报。
+        """立即发送每日日报（异步）。
 
         Returns:
             tuple[bool, str]: (是否成功，错误信息)
@@ -144,8 +153,8 @@ class TaskScheduler:
             if not is_valid:
                 return False, f"SMTP 配置错误：{error}"
 
-            # 获取今日统计
-            stats = daily_report.get_today_stats()
+            # 获取今日统计（异步）
+            stats = await daily_report.get_today_stats()
 
             # 生成报告
             html_content = daily_report.generate_html_report(stats)

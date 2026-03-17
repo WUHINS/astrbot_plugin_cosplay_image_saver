@@ -18,8 +18,8 @@ class DailyReportService:
         self.plugin = plugin_instance
         self.cosplay_dir = plugin_instance.plugin_config.cosplay_dir
 
-    def _get_stats_by_date(self, target_date: datetime) -> dict:
-        """获取指定日期的统计数据。
+    async def _get_stats_by_date(self, target_date: datetime) -> dict:
+        """获取指定日期的统计数据（从持久化记录读取，异步）。
 
         Args:
             target_date: 目标日期
@@ -35,37 +35,22 @@ class DailyReportService:
             'groups': defaultdict(lambda: {'users': set(), 'images': 0}),
         }
 
-        if not self.cosplay_dir or not self.cosplay_dir.exists():
-            return stats
-
         try:
-            # 遍历所有群组目录
-            for group_dir in self.cosplay_dir.iterdir():
-                if not group_dir.is_dir():
+            # 从持久化记录获取指定日期的图片（异步）
+            # 使用 self.plugin.plugin_config 而不是 self.plugin_config
+            records = await self.plugin.plugin_config.get_image_records_by_date(target_date)
+            
+            for record in records:
+                group_id = record.get('group_id', '')
+                user_id = record.get('user_id', '')
+                user_name = record.get('user_name', '')
+                
+                if not group_id or not user_id:
                     continue
-
-                group_id = group_dir.name
-
-                # 遍历所有用户目录
-                for user_dir in group_dir.iterdir():
-                    if not user_dir.is_dir():
-                        continue
-
-                    user_name = user_dir.name
-
-                    # 统计目标日期图片
-                    target_count = 0
-                    for img_file in user_dir.iterdir():
-                        if img_file.is_file():
-                            # 检查文件修改时间
-                            file_mtime = datetime.fromtimestamp(img_file.stat().st_mtime).date()
-                            if file_mtime == target_date:
-                                target_count += 1
-
-                    if target_count > 0:
-                        stats['total_images'] += target_count
-                        stats['groups'][group_id]['users'].add(user_name)
-                        stats['groups'][group_id]['images'] += target_count
+                
+                stats['total_images'] += 1
+                stats['groups'][group_id]['users'].add(f"{user_id}_{user_name}")
+                stats['groups'][group_id]['images'] += 1
 
             # 计算总数
             stats['total_groups'] = len([g for g in stats['groups'].values() if g['images'] > 0])
@@ -80,23 +65,23 @@ class DailyReportService:
 
         return stats
 
-    def get_today_stats(self) -> dict:
-        """获取今日统计数据。
+    async def get_today_stats(self) -> dict:
+        """获取今日统计数据（异步）。
 
         Returns:
             dict: 统计数据
         """
         today = datetime.now().date()
-        return self._get_stats_by_date(today)
+        return await self._get_stats_by_date(today)
 
-    def get_yesterday_stats(self) -> dict:
-        """获取昨日统计数据。
+    async def get_yesterday_stats(self) -> dict:
+        """获取昨日统计数据（异步）。
 
         Returns:
             dict: 统计数据
         """
         yesterday = datetime.now().date() - timedelta(days=1)
-        return self._get_stats_by_date(yesterday)
+        return await self._get_stats_by_date(yesterday)
 
     def generate_html_report(self, stats: dict, is_test: bool = False) -> str:
         """生成 HTML 格式的日报。

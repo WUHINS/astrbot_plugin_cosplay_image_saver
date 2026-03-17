@@ -1,9 +1,9 @@
-name: astrbot_plugin_cosplay_saver
+name: astrbot_plugin_cosplay_image_saver
 display_name: 女装图片保存助手
-desc: 自动识别并保存群友的女装图片到对应目录。使用视觉模型（VLM）进行 AI 识别，支持宽松判断策略，确保不漏掉任何女装图片。图片按 群号/群员 QQ 号_QQ 名 的目录结构自动组织，支持 SMTP 邮件推送每日统计日报。
+desc: 基于 AI 视觉模型的群聊图片智能保存插件。自动识别群友女装并存储，支持数据库持久化记录、自动去重、7 天数据清理。内置 SMTP 邮件推送和每日统计日报功能，支持多平台部署。
 version: 1.1.0
 author: WUHINS
-repo: https://github.com/WUHINS/astrbot_plugin_cosplay_saver
+repo: https://github.com/WUHINS/astrbot_plugin_cosplay_image_saver
 astrbot_version: ">=4.10.4"
 support_platforms:
   - aiocqhttp

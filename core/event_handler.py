@@ -199,7 +199,7 @@ class EventHandler:
                         event, temp_path_for_detect, is_temp=True
                     )
                     if success:
-                        logger.info(f"女装图片已保存：{save_path}")
+                        logger.debug(f"女装图片已保存：{save_path}")
                     else:
                         logger.warning(f"女装图片保存失败：{save_path}")
                 else:

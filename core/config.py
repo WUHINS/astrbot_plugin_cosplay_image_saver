@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -93,12 +94,17 @@ class PluginConfig(BaseModel):
         object.__setattr__(self, "cache_dir", data_dir / "cache")
         object.__setattr__(self, "category_info_path", data_dir / "category_info.json")
         object.__setattr__(self, "cosplay_dir", data_dir / "cosplay")  # 女装图片保存目录
+        object.__setattr__(self, "database_path", data_dir / "image_records.db")  # 数据库文件
 
         # 确保目录存在
         self.ensure_base_dirs()
 
         self._load_category_state()
         self._migrate_category_config()
+        
+        # 初始化数据库
+        from .database import Database
+        object.__setattr__(self, "db", Database(self.database_path))
 
     def _read_json_file(self, path: Path):
         try:
@@ -245,10 +251,91 @@ class PluginConfig(BaseModel):
         return self.cache_dir
 
     def ensure_base_dirs(self) -> None:
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.raw_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.cosplay_dir.mkdir(parents=True, exist_ok=True)  # 女装图片保存目录
+        """确保基础目录存在（带异常处理）。"""
+        try:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            self.raw_dir.mkdir(parents=True, exist_ok=True)
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            self.cosplay_dir.mkdir(parents=True, exist_ok=True)  # 女装图片保存目录
+        except PermissionError as e:
+            logger.error(f"[Config] 创建目录失败（权限不足）：{e}")
+            raise
+        except Exception as e:
+            logger.error(f"[Config] 创建目录失败：{e}")
+            raise
+
+    async def add_image_record(self, record: dict) -> bool:
+        """添加图片保存记录（使用数据库，异步）。
+        
+        Args:
+            record: 记录字典，包含 save_path, group_id, user_id, user_name, timestamp, hash 等字段
+            
+        Returns:
+            bool: 是否添加成功
+        """
+        try:
+            if not hasattr(self, "db"):
+                logger.error("[Config] 数据库未初始化")
+                return False
+            
+            return await self.db.add_record(record)
+        except Exception as e:
+            logger.error(f"[Config] 添加图片记录失败：{e}")
+            return False
+
+    async def get_image_records_by_date(self, target_date: datetime.date) -> list[dict]:
+        """获取指定日期的图片记录（从数据库，异步）。
+        
+        Args:
+            target_date: 目标日期
+            
+        Returns:
+            list[dict]: 图片记录列表
+        """
+        try:
+            if not hasattr(self, "db"):
+                logger.error("[Config] 数据库未初始化")
+                return []
+            
+            return await self.db.get_records_by_date(target_date)
+        except Exception as e:
+            logger.error(f"[Config] 获取图片记录失败：{e}")
+            return []
+
+    async def get_all_image_records(self) -> list[dict]:
+        """获取所有图片记录（从数据库，异步）。
+        
+        Returns:
+            list[dict]: 所有图片记录
+        """
+        try:
+            if not hasattr(self, "db"):
+                logger.error("[Config] 数据库未初始化")
+                return []
+            
+            return await self.db.get_all_records()
+        except Exception as e:
+            logger.error(f"[Config] 获取所有图片记录失败：{e}")
+            return []
+
+    async def cleanup_old_records(self, retention_days: int = 7) -> int:
+        """清理旧记录（异步）。
+        
+        Args:
+            retention_days: 保留天数，默认 7 天
+            
+        Returns:
+            int: 删除的记录数
+        """
+        try:
+            if not hasattr(self, "db"):
+                logger.error("[Config] 数据库未初始化")
+                return 0
+            
+            return await self.db.cleanup_old_records(retention_days)
+        except Exception as e:
+            logger.error(f"[Config] 清理旧记录失败：{e}")
+            return 0
 
     def get_group_id(self, event: AstrMessageEvent) -> str:
         """获取群号。"""
