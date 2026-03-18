@@ -74,19 +74,9 @@ class Main(Star):
             ]:
                 await asyncio.to_thread(dir_path.mkdir, parents=True, exist_ok=True)
 
-            # 迁移旧数据到数据库
-            try:
-                await self._migrate_existing_images()
-            except Exception as e:
-                logger.error(f"[CosplaySaver] 数据迁移失败：{e}")
-
-            # 清理 7 天前的旧记录（异步）
-            try:
-                deleted_count = await self.plugin_config.cleanup_old_records(7)
-                if deleted_count > 0:
-                    logger.info(f"[CosplaySaver] 已自动清理 {deleted_count} 条 7 天前的记录")
-            except Exception as e:
-                logger.error(f"[CosplaySaver] 清理旧记录失败：{e}")
+            # 注意：不再在初始化时扫描目录迁移历史数据
+            # 原因：会造成巨大的 IO 开销和 CPU 占用
+            # 新保存的图片会自动写入数据库，历史数据无需强制迁移
 
             # 启动定时任务调度器（如果启用了邮件推送）
             if self.plugin_config.smtp.enabled:
@@ -101,81 +91,6 @@ class Main(Star):
         except Exception as e:
             logger.error(f"[CosplaySaver] 初始化失败：{e}", exc_info=True)
             raise
-
-    async def _migrate_existing_images(self):
-        """迁移已存在的图片到持久化记录（仅迁移未记录的）。"""
-        try:
-            # 使用 self.plugin_config.cosplay_dir 而不是 self.cosplay_dir
-            cosplay_dir = self.plugin_config.cosplay_dir
-            if not cosplay_dir or not cosplay_dir.exists():
-                return
-            
-            # 获取所有已有记录
-            existing_records = await self.plugin_config.get_all_image_records()
-            existing_paths = {record['save_path'] for record in existing_records}
-            
-            migrated_count = 0
-            
-            # 遍历所有已保存的图片
-            for group_dir in cosplay_dir.iterdir():
-                if not group_dir.is_dir():
-                    continue
-                
-                group_id = group_dir.name
-                
-                for user_dir in group_dir.iterdir():
-                    if not user_dir.is_dir():
-                        continue
-                    
-                    # 解析用户信息
-                    user_parts = user_dir.name.split('_', 1)
-                    user_id = user_parts[0] if user_parts else ''
-                    user_name = user_parts[1] if len(user_parts) > 1 else ''
-                    
-                    for img_file in user_dir.iterdir():
-                        if not img_file.is_file():
-                            continue
-                        
-                        img_path_str = str(img_file)
-                        
-                        # 如果已经有记录，跳过
-                        if img_path_str in existing_paths:
-                            continue
-                        
-                        # 计算哈希
-                        try:
-                            import hashlib
-                            hasher = hashlib.sha256()
-                            with open(img_file, 'rb') as f:
-                                hasher.update(f.read())
-                            img_hash = hasher.hexdigest()
-                        except Exception as e:
-                            logger.warning(f"计算哈希失败 {img_file}: {e}")
-                            img_hash = ""
-                        
-                        # 创建记录
-                        record = {
-                            "save_path": img_path_str,
-                            "group_id": group_id,
-                            "user_id": user_id,
-                            "user_name": user_name,
-                            "hash": img_hash,
-                            "timestamp": datetime.fromtimestamp(img_file.stat().st_mtime).isoformat(),
-                            "file_size": img_file.stat().st_size
-                        }
-                        
-                        # 写入记录（异步）
-                        if await self.plugin_config.add_image_record(record):
-                            migrated_count += 1
-                            logger.debug(f"已迁移图片记录：{img_path_str}")
-            
-            if migrated_count > 0:
-                logger.info(f"[CosplaySaver] 已迁移 {migrated_count} 张历史图片到持久化记录")
-            else:
-                logger.debug("[CosplaySaver] 无需迁移历史图片")
-                
-        except Exception as e:
-            logger.error(f"[CosplaySaver] 迁移历史图片失败：{e}", exc_info=True)
 
     async def _safe_remove_file(self, file_path: str) -> bool:
         """安全删除文件。
@@ -214,6 +129,11 @@ class Main(Star):
                 self.image_processor_service.cleanup()
             if self.event_handler:
                 await self.event_handler.cleanup()
+            
+            # 关闭数据库连接池（重要！）
+            if hasattr(self.plugin_config, "db") and self.plugin_config.db:
+                await self.plugin_config.db.close()
+                logger.info("[CosplaySaver] 数据库连接池已关闭")
 
             logger.info("[CosplaySaver] 插件已安全终止")
         except Exception as e:

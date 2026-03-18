@@ -176,11 +176,15 @@ class ImageProcessorService:
                 judgment = parts[0].strip().lower()
                 reason = parts[1].strip() if len(parts) > 1 else ""
 
-                # 判断是否为女装
-                is_cosplay = any(
-                    keyword in judgment
-                    for keyword in ["是", "yes", "true", "有", "穿着"]
-                )
+                # 判断是否为女装（精确匹配，避免"不是"被误判）
+                # 先检查否定词，再检查肯定词
+                if any(neg in judgment for neg in ["不是", "否", "no", "无", "未穿着"]):
+                    is_cosplay = False
+                elif any(pos in judgment for pos in ["是", "yes", "true", "有", "穿着"]):
+                    is_cosplay = True
+                else:
+                    # 没有明确判断词，默认否定
+                    is_cosplay = False
 
                 # 如果没有明确理由，从全文提取
                 if not reason:
@@ -188,11 +192,14 @@ class ImageProcessorService:
 
                 return is_cosplay, reason
             else:
-                # 没有分隔符，检查是否包含肯定关键词
-                is_cosplay = any(
-                    keyword in result
-                    for keyword in ["是", "yes", "穿着", "女装", "女性", "裙子"]
-                )
+                # 没有分隔符，检查是否包含肯定关键词（同样先检查否定）
+                if any(neg in result for neg in ["不是", "否", "no", "无", "未穿着"]):
+                    is_cosplay = False
+                elif any(pos in result for pos in ["是", "yes", "穿着", "女装", "女性", "裙子"]):
+                    is_cosplay = True
+                else: 
+                    is_cosplay = False
+
                 return is_cosplay, result[:100]
 
         except Exception as e:
@@ -266,12 +273,12 @@ class ImageProcessorService:
                 logger.warning("无法计算图片哈希值")
                 return False, "无法计算图片哈希值"
 
-            # 检查目标目录中是否已存在相同图片（通过哈希对比）
-            is_duplicate, existing_file = await self._check_duplicate_by_hash(
-                user_dir, new_image_hash
+            # 检查数据库中是否已存在相同图片（基于哈希值，只检查 7 天内）
+            is_duplicate, existing_file = await self.plugin_config.db.check_duplicate_by_hash(
+                group_id, sender_id, new_image_hash, 7
             )
             if is_duplicate:
-                logger.info(f"检测到重复图片（哈希相同），已跳过保存：{existing_file}")
+                logger.info(f"检测到重复图片（数据库），已跳过保存：{existing_file}")
                 # 如果是临时文件，需要删除
                 if is_temp and os.path.exists(file_path):
                     await asyncio.to_thread(os.remove, file_path)
@@ -304,7 +311,6 @@ class ImageProcessorService:
                     "user_id": sender_id,
                     "user_name": sender_name,
                     "hash": new_image_hash,
-                    "timestamp": datetime.now().isoformat(),
                     "file_size": save_path.stat().st_size if save_path.exists() else 0
                 }
                 await self.plugin_config.add_image_record(record)
@@ -510,11 +516,22 @@ class ImageProcessorService:
         retry_delay = 1.0
         last_error: Exception | None = None
 
+        # 获取日志路径配置（默认不记录完整路径）
+        log_full_path = getattr(self.plugin_config, "log_full_path", False)
+        
+        # 根据配置决定是否显示完整路径
+        if log_full_path:
+            log_url = file_url
+        else:
+            # 只保留文件名，隐藏完整路径
+            import os
+            log_url = f"file://{os.path.basename(file_url)}" if file_url.startswith("file://") else file_url
+
         for attempt in range(max_retries):
             try:
                 logger.debug(
                     f"调用 VLM (尝试 {attempt + 1}/{max_retries}), "
-                    f"provider={provider_id}, 图片={file_url}"
+                    f"provider={provider_id}, 图片={log_url}"
                 )
                 result = await self.plugin.context.llm_generate(
                     chat_provider_id=provider_id,
@@ -569,43 +586,6 @@ class ImageProcessorService:
         except Exception as e:
             logger.error(f"计算哈希值失败：{e}")
             return ""
-
-    async def _check_duplicate_by_hash(
-        self, target_dir: Path, new_hash: str
-    ) -> tuple[bool, str | None]:
-        """通过哈希值检查目录中是否已存在重复图片。
-
-        Args:
-            target_dir: 目标目录
-            new_hash: 新图片的哈希值
-
-        Returns:
-            tuple[bool, str | None]: (是否重复，已存在的文件路径)
-        """
-        if not target_dir.exists():
-            return False, None
-
-        try:
-            # 遍历目录中的所有文件
-            for existing_file in target_dir.iterdir():
-                if not existing_file.is_file():
-                    continue
-
-                # 只检查图片文件
-                if existing_file.suffix.lower() not in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-                    continue
-
-                # 计算已存在文件的哈希值
-                existing_hash = await self._compute_hash(str(existing_file))
-                if existing_hash and existing_hash == new_hash:
-                    logger.debug(f"发现重复图片：{existing_file} (哈希：{new_hash[:8]})")
-                    return True, str(existing_file)
-
-            return False, None
-
-        except Exception as e:
-            logger.error(f"检查重复图片失败：{e}")
-            return False, None
 
     def _evict_image_cache(self) -> None:
         """淘汰 _image_cache 中最旧的条目，保持在最大容量以内。"""

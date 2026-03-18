@@ -98,9 +98,6 @@ class PluginConfig(BaseModel):
 
         # 确保目录存在
         self.ensure_base_dirs()
-
-        self._load_category_state()
-        self._migrate_category_config()
         
         # 初始化数据库
         from .database import Database
@@ -143,42 +140,6 @@ class PluginConfig(BaseModel):
             logger.error(f"[Config] 写入 JSON 文件时发生未知错误 {path}: {e}")
             return False
 
-    def _load_category_state(self) -> None:
-        stored_categories = self._read_json_file(self.categories_path)
-        stored_info = self._read_json_file(self.category_info_path)
-
-        config_categories = None
-        config_info = None
-        if isinstance(self._data, dict):
-            if "categories" in self._data:
-                config_categories = self._data.get("categories")
-            if "category_info" in self._data:
-                config_info = self._data.get("category_info")
-
-        # 使用 BaseModel.__setattr__ 绕过自定义 __setattr__ 中的写文件逻辑
-        # 避免初始化期间重复写文件（最后统一写一次即可）
-        self.save_categories()
-        self.save_category_info()
-
-    def _migrate_category_config(self) -> None:
-        if not isinstance(self._data, dict):
-            return
-        removed = False
-        if "categories" in self._data:
-            try:
-                del self._data["categories"]
-                removed = True
-            except Exception:
-                pass
-        if "category_info" in self._data:
-            try:
-                del self._data["category_info"]
-                removed = True
-            except Exception:
-                pass
-        if removed and hasattr(self._data, "save_config"):
-            self._data.save_config()
-
     def save_webui_config(self) -> None:
         """保存 WebUI 配置。"""
         if hasattr(self, "_data") and hasattr(self._data, "save_config"):
@@ -205,8 +166,8 @@ class PluginConfig(BaseModel):
                         self._data.save_config({key: value.model_dump()})
                     else:
                         self._data.save_config({key: value})
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"[Config] 保存配置失败 {key}: {e}")
             elif isinstance(self._data, dict):
                 self._data[key] = value
 
@@ -283,11 +244,12 @@ class PluginConfig(BaseModel):
             logger.error(f"[Config] 添加图片记录失败：{e}")
             return False
 
-    async def get_image_records_by_date(self, target_date: datetime.date) -> list[dict]:
+    async def get_image_records_by_date(self, target_date: datetime.date, use_local_time: bool = True) -> list[dict]:
         """获取指定日期的图片记录（从数据库，异步）。
         
         Args:
             target_date: 目标日期
+            use_local_time: 是否使用本地时间查询（默认 True，跨日统计更准确）
             
         Returns:
             list[dict]: 图片记录列表
@@ -297,14 +259,17 @@ class PluginConfig(BaseModel):
                 logger.error("[Config] 数据库未初始化")
                 return []
             
-            return await self.db.get_records_by_date(target_date)
+            return await self.db.get_records_by_date(target_date, use_local_time=use_local_time)
         except Exception as e:
             logger.error(f"[Config] 获取图片记录失败：{e}")
             return []
 
-    async def get_all_image_records(self) -> list[dict]:
+    async def get_all_image_records(self, order_by_utc: bool = True) -> list[dict]:
         """获取所有图片记录（从数据库，异步）。
         
+        Args:
+            order_by_utc: 是否按 UTC 时间排序（默认 True）
+            
         Returns:
             list[dict]: 所有图片记录
         """
@@ -313,16 +278,17 @@ class PluginConfig(BaseModel):
                 logger.error("[Config] 数据库未初始化")
                 return []
             
-            return await self.db.get_all_records()
+            return await self.db.get_all_records(order_by_utc=order_by_utc)
         except Exception as e:
             logger.error(f"[Config] 获取所有图片记录失败：{e}")
             return []
 
-    async def cleanup_old_records(self, retention_days: int = 7) -> int:
+    async def cleanup_old_records(self, retention_days: int = 7, use_utc: bool = False) -> int:
         """清理旧记录（异步）。
         
         Args:
             retention_days: 保留天数，默认 7 天
+            use_utc: 是否使用 UTC 时间计算（默认 False，使用本地时间更符合用户感知）
             
         Returns:
             int: 删除的记录数
@@ -332,7 +298,7 @@ class PluginConfig(BaseModel):
                 logger.error("[Config] 数据库未初始化")
                 return 0
             
-            return await self.db.cleanup_old_records(retention_days)
+            return await self.db.cleanup_old_records(retention_days, use_utc=use_utc)
         except Exception as e:
             logger.error(f"[Config] 清理旧记录失败：{e}")
             return 0

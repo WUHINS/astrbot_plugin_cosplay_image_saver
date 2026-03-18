@@ -69,10 +69,10 @@ class TaskScheduler:
                         if not (0 <= hour <= 23 and 0 <= minute <= 59):
                             raise ValueError(f"时间超出范围：{hour}:{minute}")
                     except (ValueError, AttributeError) as e:
-                        logger.error(f"[调度器] 发送时间配置非法：{self.smtp_config.send_time}, 使用默认值 08:00")
+                        logger.error(f"[调度器] 发送时间配置非法：{self.smtp_config.send_time}（UTC 时间）, 使用默认值 08:00")
                         hour, minute = 8, 0
                     
-                    now = datetime.now()
+                    now = datetime.utcnow()
                     scheduled_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
                     # 如果当前时间已经过了今天的发送时间，则设置为明天
@@ -81,7 +81,7 @@ class TaskScheduler:
 
                     # 计算等待时间
                     wait_seconds = (scheduled_time - now).total_seconds()
-                    logger.info(f"[调度器] 下次发送时间：{scheduled_time.strftime('%Y-%m-%d %H:%M:%S')}, "
+                    logger.info(f"[调度器] 下次发送时间（UTC）：{scheduled_time.strftime('%Y-%m-%d %H:%M:%S')}, "
                                f"等待 {wait_seconds:.0f} 秒")
 
                     # 等待到发送时间

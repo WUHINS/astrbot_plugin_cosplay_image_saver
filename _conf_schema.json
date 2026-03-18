@@ -69,6 +69,12 @@
     "default": 10,
     "hint": "两次图片处理之间的最小间隔（秒）。0=不限制"
   },
+  "log_full_path": {
+    "description": "日志记录完整路径",
+    "type": "bool",
+    "default": false,
+    "hint": "✅ 开启：日志中记录完整文件路径（调试用）\n❌ 关闭：仅记录文件名（保护隐私，推荐）"
+  },
 
   "_smtp_section": {
     "description": "=== SMTP 邮件推送 ===",

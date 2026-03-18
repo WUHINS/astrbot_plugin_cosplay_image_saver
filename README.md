@@ -73,6 +73,7 @@ pip install -r requirements.txt
   "cosplay_vision_provider_id": "",
   "vision_provider_id": "",
   "ignore_gif": false,
+  "log_full_path": false,
   "smtp": {
     "enabled": false,
     "smtp_server": "smtp.qq.com",
@@ -97,11 +98,16 @@ pip install -r requirements.txt
 | `cosplay_vision_provider_id` | string | `""` | 专用识别模型（留空使用默认） |
 | `vision_provider_id` | string | `""` | 视觉模型（留空使用全局默认） |
 | `ignore_gif` | bool | `false` | 是否忽略 GIF 图片 |
+| `log_full_path` | bool | `false` | 是否记录完整文件路径（隐私保护） |
 
 **识别阈值建议**：
 - **0.5-0.6**（推荐）- 平衡误判和漏判
 - **0.3-0.5** - 宽松模式，几乎不漏判
 - **0.7-0.9** - 严格模式，只保存明显图片
+
+**日志路径建议**：
+- **false**（推荐）- 仅记录文件名，保护隐私
+- **true** - 记录完整路径，便于调试
 
 #### SMTP 邮件配置
 

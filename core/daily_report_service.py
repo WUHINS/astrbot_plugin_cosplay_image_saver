@@ -18,11 +18,12 @@ class DailyReportService:
         self.plugin = plugin_instance
         self.cosplay_dir = plugin_instance.plugin_config.cosplay_dir
 
-    async def _get_stats_by_date(self, target_date: datetime) -> dict:
+    async def _get_stats_by_date(self, target_date: datetime, use_local_time: bool = True) -> dict:
         """获取指定日期的统计数据（从持久化记录读取，异步）。
 
         Args:
             target_date: 目标日期
+            use_local_time: 是否使用本地时间统计（默认 True，跨日统计更准确）
 
         Returns:
             dict: 统计数据
@@ -37,8 +38,11 @@ class DailyReportService:
 
         try:
             # 从持久化记录获取指定日期的图片（异步）
-            # 使用 self.plugin.plugin_config 而不是 self.plugin_config
-            records = await self.plugin.plugin_config.get_image_records_by_date(target_date)
+            # 使用本地时间统计，符合当地用户的日期概念
+            records = await self.plugin.plugin_config.db.get_records_by_date(
+                target_date.date() if isinstance(target_date, datetime) else target_date,
+                use_local_time=use_local_time
+            )
             
             for record in records:
                 group_id = record.get('group_id', '')
@@ -65,23 +69,29 @@ class DailyReportService:
 
         return stats
 
-    async def get_today_stats(self) -> dict:
+    async def get_today_stats(self, use_local_time: bool = True) -> dict:
         """获取今日统计数据（异步）。
 
+        Args:
+            use_local_time: 是否使用本地时间统计（默认 True）
+
         Returns:
             dict: 统计数据
         """
-        today = datetime.now().date()
-        return await self._get_stats_by_date(today)
+        today = datetime.now()  # 本地时间
+        return await self._get_stats_by_date(today, use_local_time=use_local_time)
 
-    async def get_yesterday_stats(self) -> dict:
+    async def get_yesterday_stats(self, use_local_time: bool = True) -> dict:
         """获取昨日统计数据（异步）。
 
+        Args:
+            use_local_time: 是否使用本地时间统计（默认 True）
+
         Returns:
             dict: 统计数据
         """
-        yesterday = datetime.now().date() - timedelta(days=1)
-        return await self._get_stats_by_date(yesterday)
+        yesterday = datetime.now() - timedelta(days=1)  # 本地时间
+        return await self._get_stats_by_date(yesterday, use_local_time=use_local_time)
 
     def generate_html_report(self, stats: dict, is_test: bool = False) -> str:
         """生成 HTML 格式的日报。
@@ -200,7 +210,7 @@ class DailyReportService:
         html_content += """
     <div class="footer">
         <p>此报告由 AstrBot 女装图片保存助手自动生成</p>
-        <p>报告生成时间：""" + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + """</p>
+        <p>报告生成时间（本地）：""" + datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M:%S%z') + """</p>
     </div>
 </body>
 </html>
@@ -245,7 +255,7 @@ class DailyReportService:
         else:
             text += "\n今日暂无保存图片\n"
 
-        text += f"\n报告生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        text += f"\n报告生成时间（本地）：{datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M:%S%z')}\n"
         text += "\n此报告由 AstrBot 女装图片保存助手自动生成\n"
 
         return text
