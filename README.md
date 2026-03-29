@@ -186,7 +186,7 @@ pip install -r requirements.txt
 插件会自动监听群聊图片，识别后保存到：
 
 ```
-/AstrBot/data/plugin_data/astrbot_plugin_cosplay_image_saver/cosplay/群号/用户 ID_用户名/时间戳_哈希值.jpg
+/AstrBot/data/plugin_data/astrbot_plugin_cosplay_image_saver/cosplay/QID [QQ 号]/时间戳_哈希值.jpg
 ```
 
 ### 目录结构
@@ -194,18 +194,21 @@ pip install -r requirements.txt
 ```
 astrbot_plugin_cosplay_image_saver/
 ├── cosplay/
-│   ├── 12345678/
-│   │   ├── 111111_小明/
-│   │   │   ├── 1773752809_5b644ad7.jpg
-│   │   │   └── 1773752810_abc12345.png
-│   │   └── 222222_小红/
-│   │       └── 1773752811_def67890.jpg
-│   └── 87654321/
-│       └── 333333_小美/
-│           └── 1773752812_ghi11111.gif
+│   ├── QID 111111/
+│   │   ├── 1773752809_5b644ad7.jpg
+│   │   ├── 1773752810_abc12345.png
+│   │   └── 1773752811_def67890.jpg
+│   └── QID 222222/
+│       ├── 1773752812_ghi11111.gif
+│       └── 1773752813_jkl22222.jpg
 ├── image_records.db  # SQLite 数据库记录
 └── ...
 ```
+
+**说明**：
+- 图片按用户 QQ 号分类存储，目录格式为 `QID [QQ 号]`
+- 统计功能仍然按群聊分组，在日报中显示各群聊的活跃用户和保存图片数
+- 数据库记录包含完整的群号、用户 ID 和用户名信息
 
 ### GIF 处理
 

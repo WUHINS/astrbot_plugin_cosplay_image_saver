@@ -232,7 +232,7 @@ class ImageProcessorService:
     ) -> tuple[bool, str]:
         """保存女装图片到对应目录。
 
-        目录结构：cosplay/群号/群员 QQ 号_QQ 名/图片文件
+        目录结构：QID [QQ 号]/图片文件
 
         Args:
             event: 消息事件
@@ -255,11 +255,8 @@ class ImageProcessorService:
             if not sender_id:
                 return False, "无法获取发送者 ID"
 
-            # 净化文件名，防止路径注入
-            sender_name = self._sanitize_filename(sender_name)
-
-            # 构建保存目录：cosplay/群号/群员 QQ 号_QQ 名
-            user_dir = self.plugin_config.cosplay_dir / group_id / f"{sender_id}_{sender_name}"
+            # 构建保存目录：QID [QQ 号]
+            user_dir = self.plugin_config.cosplay_dir / f"QID {sender_id}"
 
             try:
                 await asyncio.to_thread(user_dir.mkdir, parents=True, exist_ok=True)
