@@ -189,7 +189,7 @@ class ImageProcessorService:
         # 添加自定义判断要点
         custom_tips = ""
         if exclude_text or custom_prompt:
-            custom_tips = "\n- 符合上述自定义排除条件的图片应判断为"否""
+            custom_tips = "\n- 符合上述自定义排除条件的图片应判断为\"否\""
         
         return f"""请判断这张图片中的人物是否穿着女性化服装或进行女装 cos。
 
