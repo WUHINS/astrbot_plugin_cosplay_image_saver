@@ -129,7 +129,33 @@ class ImageProcessorService:
 
         用于检测暴露腿部、短裤、清秀像女孩子的、脚丫、2次元卡通等灰色定义图片。
         """
-        return """请判断这张图片是否包含以下灰色定义特征（满足任一条件即可判断为"是"）：
+        # 获取自定义排除提示词
+        custom_prompt = getattr(self.plugin_config, "custom_exclude_prompt", "")
+        exclude_text = getattr(self.plugin_config, "exclude_text_images", False)
+        
+        # 构建自定义排除条件部分
+        custom_exclusions = []
+        if exclude_text:
+            custom_exclusions.append("图片中含有大量文本/文字（如表情包文字、截图文字、海报文字等）")
+        if custom_prompt:
+            custom_exclusions.append(custom_prompt)
+        
+        # 如果有自定义排除条件，追加到排除条件后面
+        custom_exclusion_text = ""
+        if custom_exclusions:
+            base_num = 5
+            custom_items = []
+            for item in custom_exclusions:
+                custom_items.append(f"{base_num}. {item}")
+                base_num += 1
+            custom_exclusion_text = "\n" + "\n".join(custom_items)
+        
+        # 添加自定义判断要点
+        custom_tips = ""
+        if exclude_text or custom_prompt:
+            custom_tips = "\n- 符合上述自定义排除条件的图片应判断为\"否\""
+        
+        return f"""请判断这张图片是否包含以下灰色定义特征（满足任一条件即可判断为"是"）：
 
 【识别标准】（满足任一条件即可）：
 1. 有明显的大腿/小腿皮肤露出（穿着短裤、短裙、短裤搭配露腿）
@@ -144,7 +170,7 @@ class ImageProcessorService:
 1. 穿着长裤/长裤搭配鞋子，完全无腿部露出
 2. 正常着装但无任何腿部/脚部特写或清秀特征
 3. 明显的成年男性特征，无清秀感
-4. 普通照片/写实风格但无任何灰色特征
+4. 普通照片/写实风格但无任何灰色特征{custom_exclusion_text}
 
 请按以下格式回答：
 判断结果 (是/否)|理由 (简短描述关键特征)
@@ -157,7 +183,7 @@ class ImageProcessorService:
 是 | 穿着紧身运动短裤，翘腿姿势展示腿部
 是 | 高浓度二次元动漫风格插画，虚拟角色
 否 | 穿着黑色长裤和皮鞋，无腿部露出
-否 | 穿着牛仔裤，无明显腿部或清秀特征"""
+否 | 穿着牛仔裤，无明显腿部或清秀特征{custom_tips}"""
 
     def _get_cosplay_detection_prompt(self) -> str:
         """获取女装图片检测提示词。
