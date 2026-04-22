@@ -39,6 +39,18 @@
     "default": false,
     "hint": "✅ 开启：跳过所有 GIF 图片，不检测不保存\n❌ 关闭：正常处理 GIF 图片（会提取关键帧识别）"
   },
+  "exclude_text_images": {
+    "description": "排除含大量文本的图片",
+    "type": "bool",
+    "default": false,
+    "hint": "✅ 开启：自动排除含有大量文字的图片（如表情包文字、截图文字、海报等）\n❌ 关闭：不特别排除文本图片"
+  },
+  "custom_exclude_prompt": {
+    "description": "自定义排除提示词",
+    "type": "string",
+    "default": "",
+    "hint": "添加自定义排除条件，例如：'图片中包含二维码'\n留空表示不添加自定义排除条件"
+  },
 
   "_model_section": {
     "description": "=== 模型配置 ===",

@@ -100,6 +100,8 @@ pip install -r requirements.txt
 | `cosplay_vision_provider_id` | string | `""` | 专用识别模型（留空使用默认） |
 | `vision_provider_id` | string | `""` | 视觉模型（留空使用全局默认） |
 | `ignore_gif` | bool | `false` | 是否忽略 GIF 图片 |
+| `exclude_text_images` | bool | `false` | 是否排除含有大量文本的图片 |
+| `custom_exclude_prompt` | string | `""` | 自定义排除提示词（自由添加排除条件） |
 | `log_full_path` | bool | `false` | 是否记录完整文件路径（隐私保护） |
 
 **识别阈值建议**：

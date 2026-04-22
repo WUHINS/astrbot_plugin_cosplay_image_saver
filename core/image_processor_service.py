@@ -165,7 +165,33 @@ class ImageProcessorService:
         使用宽松的识别策略，宁可误判也不要漏掉。
         基于 553 张少年感图片样本分析，添加了排除条件以避免误判。
         """
-        return """请判断这张图片中的人物是否穿着女性化服装或进行女装 cos。
+        # 获取自定义排除提示词
+        custom_prompt = getattr(self.plugin_config, "custom_exclude_prompt", "")
+        exclude_text = getattr(self.plugin_config, "exclude_text_images", False)
+        
+        # 构建自定义排除条件部分
+        custom_exclusions = []
+        if exclude_text:
+            custom_exclusions.append("图片中含有大量文本/文字（如表情包文字、截图文字、海报文字等）")
+        if custom_prompt:
+            custom_exclusions.append(custom_prompt)
+        
+        # 如果有自定义排除条件，追加到排除条件后面
+        custom_exclusion_text = ""
+        if custom_exclusions:
+            base_num = 7
+            custom_items = []
+            for item in custom_exclusions:
+                custom_items.append(f"{base_num}. {item}")
+                base_num += 1
+            custom_exclusion_text = "\n" + "\n".join(custom_items)
+        
+        # 添加自定义判断要点
+        custom_tips = ""
+        if exclude_text or custom_prompt:
+            custom_tips = "\n- 符合上述自定义排除条件的图片应判断为"否""
+        
+        return f"""请判断这张图片中的人物是否穿着女性化服装或进行女装 cos。
 
 【识别标准】（满足任一条件即可判断为"是"）：
 1. 穿着明显的女性服装（裙子、女仆装、洛丽塔、JK 制服、旗袍、汉服女装等）
@@ -182,7 +208,7 @@ class ImageProcessorService:
 3. 少年感/清爽风格但服装为男装（校园风、运动风、休闲风男装）
 4. 仅有女性化配饰但主体服装为男装（如仅戴蝴蝶结发夹但穿 T 恤）
 5. 动漫/游戏角色但穿着明显男装或中性服装
-6. 高浓度2次元/二次元卡通风格图片（动漫角色、虚拟角色、CG 绘画、插画、表情包等）
+6. 高浓度2次元/二次元卡通风格图片（动漫角色、虚拟角色、CG 绘画、插画、表情包等）{custom_exclusion_text}
 
 【判断要点】：
 - 重点观察服装本身，而非仅看人物长相或发型
@@ -190,7 +216,7 @@ class ImageProcessorService:
 - 有蕾丝/花边/荷叶边 + 裙装 = 是
 - 仅 T 恤/衬衫 + 裤子 = 否（即使长相清秀）
 - 请宽松判断女性化特征，但严格区分男装与女装
-- 卡通/二次元图片应判断为"否"，避免误识别表情包
+- 卡通/二次元图片应判断为"否"，避免误识别表情包{custom_tips}
 
 请按以下格式回答：
 判断结果 (是/否)|理由 (简短描述关键服装特征)

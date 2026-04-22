@@ -38,6 +38,8 @@ class PluginConfig(BaseModel):
     cosplay_vision_provider_id: str = ""  # 女装识别专用模型（留空使用默认视觉模型）
     cosplay_detection_threshold: float = 0.6  # 女装识别阈值（宽松判断）
     ignore_gif: bool = False  # 是否忽略 GIF 图片（不检测不保存）
+    exclude_text_images: bool = False  # 是否排除含有大量文本的图片
+    custom_exclude_prompt: str = ""  # 自定义排除提示词（用户可自由添加排除条件）
 
     # === 模型配置 ===
     vision_provider_id: str = ""
