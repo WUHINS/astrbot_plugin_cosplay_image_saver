@@ -34,6 +34,7 @@ class SMTPConfig(BaseModel):
 class PluginConfig(BaseModel):
     # === 女装图片保存 ===
     save_cosplay_images: bool = True  # 开启女装图片保存
+    save_leg_images: bool = False  # 开启灰色定义图片保存（腿部、短裤、清秀像女孩子等）
     cosplay_vision_provider_id: str = ""  # 女装识别专用模型（留空使用默认视觉模型）
     cosplay_detection_threshold: float = 0.6  # 女装识别阈值（宽松判断）
     ignore_gif: bool = False  # 是否忽略 GIF 图片（不检测不保存）
@@ -94,6 +95,7 @@ class PluginConfig(BaseModel):
         object.__setattr__(self, "cache_dir", data_dir / "cache")
         object.__setattr__(self, "category_info_path", data_dir / "category_info.json")
         object.__setattr__(self, "cosplay_dir", data_dir / "cosplay")  # 女装图片保存目录
+        object.__setattr__(self, "leg_images_dir", data_dir / "leg_images")  # 灰色定义图片保存目录（腿部、短裤等）
         object.__setattr__(self, "database_path", data_dir / "image_records.db")  # 数据库文件
 
         # 确保目录存在

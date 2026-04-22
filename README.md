@@ -69,6 +69,7 @@ pip install -r requirements.txt
 ```json
 {
   "save_cosplay_images": true,
+  "save_leg_images": false,
   "cosplay_detection_threshold": 0.6,
   "cosplay_vision_provider_id": "",
   "vision_provider_id": "",
@@ -93,7 +94,8 @@ pip install -r requirements.txt
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `save_cosplay_images` | bool | `true` | 是否启用图片保存 |
+| `save_cosplay_images` | bool | `true` | 是否启用女装图片保存 |
+| `save_leg_images` | bool | `false` | 是否启用灰色定义图片保存（腿部、短裤、清秀等） |
 | `cosplay_detection_threshold` | float | `0.6` | 识别阈值（0.3-0.9） |
 | `cosplay_vision_provider_id` | string | `""` | 专用识别模型（留空使用默认） |
 | `vision_provider_id` | string | `""` | 视觉模型（留空使用全局默认） |

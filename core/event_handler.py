@@ -204,6 +204,11 @@ class EventHandler:
                         logger.warning(f"女装图片保存失败：{save_path}")
                 else:
                     logger.debug(f"非女装图片：{reason}")
+                    # 如果不是女装图片，检测是否为腿部/灰色定义图片
+                    if getattr(plugin_instance.plugin_config, "save_leg_images", False):
+                        await self._detect_and_save_leg_image(
+                            plugin_instance, event, temp_path_for_detect, is_gif
+                        )
 
             except FileNotFoundError as e:
                 logger.error(f"图片文件不存在：{e}")
@@ -215,6 +220,53 @@ class EventHandler:
                 logger.error(f"图片处理参数错误：{e}")
             except Exception as e:
                 logger.error(f"处理图片失败：{e}", exc_info=True)
+
+    async def _detect_and_save_leg_image(
+        self,
+        plugin_instance: Any,
+        event: AstrMessageEvent,
+        temp_path: str,
+        is_gif: bool,
+    ) -> None:
+        """检测并保存腿部/灰色定义图片。
+
+        Args:
+            plugin_instance: 插件实例
+            event: 消息事件
+            temp_path: 临时文件路径
+            is_gif: 是否为 GIF 图片
+        """
+        try:
+            # 检查是否忽略 GIF
+            if getattr(plugin_instance.plugin_config, "ignore_gif", False):
+                if is_gif or temp_path.lower().endswith(".gif"):
+                    logger.debug(f"已忽略 GIF 腿部图片：{temp_path}")
+                    await self._safe_remove_file(temp_path)
+                    return
+
+            # 使用 ImageProcessorService 检测腿部图片
+            is_leg, reason = await plugin_instance.image_processor_service.detect_leg_image(
+                event, temp_path
+            )
+
+            if is_leg:
+                logger.info(f"检测到腿部/灰色定义图片：{reason}")
+                # 保存腿部图片到对应目录
+                success, save_path = await plugin_instance.image_processor_service.save_leg_image(
+                    event, temp_path, is_temp=True
+                )
+                if success:
+                    logger.debug(f"腿部/灰色图片已保存：{save_path}")
+                else:
+                    logger.warning(f"腿部/灰色图片保存失败：{save_path}")
+            else:
+                logger.debug(f"非腿部图片：{reason}")
+
+        except Exception as e:
+            logger.error(f"处理腿部图片失败：{e}", exc_info=True)
+        finally:
+            # 清理临时文件
+            await self._safe_remove_file(temp_path)
 
     async def _clean_raw_directory(self) -> int:
         """清理 raw 目录中的所有原始图片文件。"""

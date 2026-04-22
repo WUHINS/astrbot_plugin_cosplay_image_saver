@@ -8,7 +8,13 @@
     "description": "开启女装图片保存",
     "type": "bool",
     "default": true,
-    "hint": "✅ 开启：自动识别并保存群友的女装图片到独立目录\n❌ 关闭：不保存女装图片\n\n📁 保存路径：数据目录/cosplay/群号/群员 QQ 号_QQ 名/图片文件"
+    "hint": "✅ 开启：自动识别并保存群友的女装图片到独立目录\n❌ 关闭：不保存女装图片\n\n📁 保存路径：数据目录/cosplay/QID [QQ 号]/图片文件"
+  },
+  "save_leg_images": {
+    "description": "开启灰色定义图片保存",
+    "type": "bool",
+    "default": false,
+    "hint": "✅ 开启：自动识别并保存暴露腿部、短裤、清秀像女孩子的、脚丫等图片到独立目录\n❌ 关闭：不保存灰色定义图片\n\n📁 保存路径：数据目录/leg_images/QID [QQ 号]/图片文件\n\n🎯 识别标准：腿部皮肤露出、丝袜/长筒袜、脚丫特写、清秀像女孩子、紧身短裤秀腿等"
   },
   "cosplay_vision_provider_id": {
     "description": "女装识别专用模型",

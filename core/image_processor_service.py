@@ -124,6 +124,38 @@ class ImageProcessorService:
             logger.error(f"女装检测失败 [{file_path}]: {e}")
             return False, f"检测失败：{str(e)}"
 
+    def _get_leg_detection_prompt(self) -> str:
+        """获取腿部/灰色定义图片检测提示词。
+
+        用于检测暴露腿部、短裤、清秀像女孩子的、脚丫等灰色定义图片。
+        """
+        return """请判断这张图片是否包含以下灰色定义特征（满足任一条件即可判断为"是"）：
+
+【识别标准】（满足任一条件即可）：
+1. 有明显的大腿/小腿皮肤露出（穿着短裤、短裙、短裤搭配露腿）
+2. 穿着丝袜/长筒袜/小腿袜，有明显的腿部线条展示
+3. 有明显的脚丫/脚部特写（赤脚、穿袜子露脚趾、脚部姿势）
+4. 人物长相清秀/柔和，像女孩子的男性或中性化人物
+5. 穿着紧身短裤/运动短裤，展示腿部线条
+6. 人物姿态有秀腿/腿部动作（如翘腿、盘腿展示腿部）
+
+【排除条件】（应判断为"否"）：
+1. 穿着长裤/长裤搭配鞋子，完全无腿部露出
+2. 正常着装但无任何腿部/脚部特写或清秀特征
+3. 明显的成年男性特征，无清秀感
+
+请按以下格式回答：
+判断结果 (是/否)|理由 (简短描述关键特征)
+
+示例：
+是 | 穿着黑色短裤，有明显的大腿和小腿露出
+是 | 穿着白色小腿袜搭配运动鞋，腿部线条清晰
+是 | 赤脚特写，脚丫清晰可见
+是 | 人物长相清秀柔和，皮肤白皙，像女孩子
+是 | 穿着紧身运动短裤，翘腿姿势展示腿部
+否 | 穿着黑色长裤和皮鞋，无腿部露出
+否 | 穿着牛仔裤，无明显腿部或清秀特征"""
+
     def _get_cosplay_detection_prompt(self) -> str:
         """获取女装图片检测提示词。
 
@@ -332,6 +364,231 @@ class ImageProcessorService:
 
         except Exception as e:
             logger.error(f"保存女装图片失败：{e}")
+            return False, f"保存失败：{str(e)}"
+
+    async def detect_leg_image(
+        self,
+        event: AstrMessageEvent | None,
+        file_path: str,
+    ) -> tuple[bool, str]:
+        """检测图片是否为腿部/灰色定义图片。
+
+        Args:
+            event: 消息事件
+            file_path: 图片路径
+
+        Returns:
+            tuple[bool, str]: (是否为腿部图片，检测理由)
+        """
+        # 检查配置是否启用
+        if not getattr(self.plugin_config, "save_leg_images", False):
+            return False, ""
+
+        base_path = Path(file_path)
+        if not base_path.exists():
+            logger.warning(f"图片文件不存在：{file_path}")
+            return False, ""
+
+        # 计算哈希用于缓存
+        hash_val = await self._compute_hash(file_path)
+        
+        # 如果哈希计算失败，跳过缓存
+        if not hash_val:
+            logger.warning(f"无法计算图片哈希，跳过缓存：{file_path}")
+            hash_val = f"fallback_leg_{time.time()}"
+        
+        cache_key = f"leg_{hash_val}"
+
+        # 检查缓存
+        if cache_key in self._image_cache:
+            cached = self._image_cache[cache_key]
+            if time.time() - cached.get("timestamp", 0) < self._cache_expire_time:
+                logger.debug(f"腿部检测缓存命中：{hash_val[:8]}")
+                return cached.get("is_leg", False), cached.get("reason", "")
+
+        # 使用视觉模型检测
+        try:
+            # 获取视觉模型 provider
+            provider = getattr(
+                self.plugin_config, "cosplay_vision_provider_id", ""
+            ) or getattr(self.plugin_config, "vision_provider_id", "")
+
+            # 调用 VLM
+            result = await self._call_vision_model(
+                event=event,
+                img_path=file_path,
+                prompt=self._get_leg_detection_prompt(),
+                provider_id=provider or None,
+            )
+
+            # 解析结果
+            is_leg, reason = self._parse_leg_result(result)
+
+            # 缓存结果（仅在哈希有效时）
+            if hash_val and not hash_val.startswith("fallback_"):
+                self._image_cache[cache_key] = {
+                    "is_leg": is_leg,
+                    "reason": reason,
+                    "timestamp": time.time(),
+                }
+                self._evict_image_cache()
+
+            logger.info(f"腿部检测结果：{file_path} -> {is_leg} ({reason})")
+            return is_leg, reason
+
+        except Exception as e:
+            logger.error(f"腿部检测失败 [{file_path}]: {e}")
+            return False, f"检测失败：{str(e)}"
+
+    def _parse_leg_result(self, result: str) -> tuple[bool, str]:
+        """解析腿部检测结果。
+
+        Args:
+            result: 模型返回的文本
+
+        Returns:
+            tuple[bool, str]: (是否为腿部图片，理由)
+        """
+        try:
+            # 清理结果
+            result = result.strip()
+            lines = [line.strip() for line in result.split("\n") if line.strip()]
+
+            if not lines:
+                return False, "无有效响应"
+
+            # 尝试解析格式：判断结果 | 理由
+            first_line = lines[0]
+            if "|" in first_line:
+                parts = first_line.split("|", 1)
+                judgment = parts[0].strip().lower()
+                reason = parts[1].strip() if len(parts) > 1 else ""
+
+                # 判断是否为腿部图片
+                if any(neg in judgment for neg in ["不是", "否", "no", "无", "未"]):
+                    is_leg = False
+                elif any(pos in judgment for pos in ["是", "yes", "true", "有"]):
+                    is_leg = True
+                else:
+                    # 没有明确判断词，默认否定
+                    is_leg = False
+
+                # 如果没有明确理由，从全文提取
+                if not reason:
+                    reason = result[:100]
+
+                return is_leg, reason
+            else:
+                # 没有分隔符，检查是否包含肯定关键词
+                if any(neg in result for neg in ["不是", "否", "no", "无"]):
+                    is_leg = False
+                elif any(pos in result for pos in ["是", "yes", "短裤", "腿部", "脚丫", "袜子", "清秀"]):
+                    is_leg = True
+                else:
+                    is_leg = False
+
+                return is_leg, result[:100]
+
+        except Exception as e:
+            logger.error(f"解析腿部检测结果失败：{e}")
+            return False, f"解析失败：{str(e)}"
+
+    async def save_leg_image(
+        self,
+        event: AstrMessageEvent,
+        file_path: str,
+        is_temp: bool = False,
+    ) -> tuple[bool, str]:
+        """保存腿部/灰色定义图片到对应目录。
+
+        目录结构：leg_images/QID [QQ 号]/图片文件
+
+        Args:
+            event: 消息事件
+            file_path: 图片路径
+            is_temp: 是否为临时文件
+
+        Returns:
+            tuple[bool, str]: (是否成功，保存路径或错误信息)
+        """
+        try:
+            # 获取群号和群员信息
+            group_id = self.plugin_config.get_group_id(event)
+            if not group_id:
+                return False, "无法获取群号"
+
+            # 获取发送者信息
+            sender_id = event.get_sender_id() or ""
+            sender_name = event.get_sender_name() or sender_id
+
+            if not sender_id:
+                return False, "无法获取发送者 ID"
+
+            # 构建保存目录：leg_images/QID [QQ 号]
+            user_dir = self.plugin_config.leg_images_dir / f"QID {sender_id}"
+
+            try:
+                await asyncio.to_thread(user_dir.mkdir, parents=True, exist_ok=True)
+            except Exception as e:
+                logger.error(f"创建腿部图片目录失败 {user_dir}: {e}")
+                return False, f"创建目录失败：{str(e)}"
+
+            # 计算待保存图片的哈希值
+            new_image_hash = await self._compute_hash(file_path)
+            if not new_image_hash:
+                logger.warning("无法计算图片哈希值")
+                return False, "无法计算图片哈希值"
+
+            # 检查数据库中是否已存在相同图片（基于哈希值，只检查 7 天内）
+            is_duplicate, existing_file = await self.plugin_config.db.check_duplicate_by_hash(
+                group_id, sender_id, new_image_hash, 7
+            )
+            if is_duplicate:
+                logger.info(f"检测到重复腿部图片（数据库），已跳过保存：{existing_file}")
+                # 如果是临时文件，需要删除
+                if is_temp and os.path.exists(file_path):
+                    await asyncio.to_thread(os.remove, file_path)
+                return True, f"跳过重复图片：{existing_file}"
+
+            # 生成文件名（包含哈希值前 8 位，便于识别重复）
+            base_path = Path(file_path)
+            ext = base_path.suffix.lower() or ".jpg"
+            timestamp = int(time.time())
+            filename = f"{timestamp}_{new_image_hash[:8]}{ext}"
+            save_path = user_dir / filename
+
+            # 复制文件到目标目录
+            try:
+                if is_temp:
+                    await asyncio.to_thread(shutil.move, file_path, save_path)
+                else:
+                    await asyncio.to_thread(shutil.copy2, file_path, save_path)
+            except FileNotFoundError:
+                logger.warning(f"保存腿部图片时发现文件已被删除：{file_path}")
+                return False, "文件已被删除"
+
+            logger.info(f"已保存腿部/灰色图片：{save_path}")
+            
+            # 写入持久化记录（异步）
+            try:
+                record = {
+                    "save_path": str(save_path),
+                    "group_id": group_id,
+                    "user_id": sender_id,
+                    "user_name": sender_name,
+                    "hash": new_image_hash,
+                    "file_size": save_path.stat().st_size if save_path.exists() else 0,
+                    "image_type": "leg"  # 标记为腿部图片
+                }
+                await self.plugin_config.add_image_record(record)
+                logger.debug(f"已写入腿部图片记录：{record['save_path']}")
+            except Exception as e:
+                logger.error(f"写入腿部图片记录失败：{e}")
+            
+            return True, str(save_path)
+
+        except Exception as e:
+            logger.error(f"保存腿部/灰色图片失败：{e}")
             return False, f"保存失败：{str(e)}"
 
     async def _call_vision_model(
